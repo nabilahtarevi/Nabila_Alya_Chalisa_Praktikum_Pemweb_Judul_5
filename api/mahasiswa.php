@@ -67,42 +67,76 @@ switch ($method) {
 /**
  * 1. Menangani HTTP GET (Ambil Semua Data atau Berdasarkan ID)
  */
-function handleGet(PDO $pdo, ?int $id): void {
+function handleGet(PDO $pdo, ?int $id): void
+{
     if ($id !== null && $id > 0) {
-        //Percobaan 5-2 Langkah 2 jika id diberikan
+        // Mengambil data mahasiswa berdasarkan ID
+        $stmt = $pdo->prepare(
+            'SELECT id, npm, nama, program_studi, angkatan, email, created_at
+             FROM mahasiswa
+             WHERE id = :id
+             LIMIT 1'
+        );
 
-    } else {
-        $search = isset($_GET['search']) ? trim($_GET['search']) : '';
-        if (!empty($search)) {
-            $stmt = $pdo->prepare('SELECT id, npm, nama, program_studi, angkatan, email, created_at FROM mahasiswa WHERE id = :id LIMIT 1');
-            $stmt->execute([':id' => $id]);
-            $mahasiswa = $stmt->fetch();
-            if ($mahasiswa) {
-                http_response_code(200);
-                echo json_encode(['status' => 'success', 'data' => $mahasiswa]);
-            } else {
-                http_response_code(404);
-                echo json_encode(['status' => 'error', 'message' => "Mahasiswa dengan ID {$id} tidak ditemukan."]);
-            }
-        } else {
-            $stmt = $pdo->prepare('SELECT id, npm, nama, program_studi, angkatan, email, created_at FROM mahasiswa WHERE npm LIKE :kw1 OR nama LIKE :kw2 OR program_studi LIKE :kw3 ORDER BY id DESC');
-            $kw = "%($search}%";
-            $stmt->execute([
-                ':kw1' => $kw,
-                ':kw2' => $kw,
-                ':kw3' => $kw,
+        $stmt->execute([':id' => $id]);
+        $mahasiswa = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($mahasiswa) {
+            http_response_code(200);
+            echo json_encode([
+                'status' => 'success',
+                'data' => $mahasiswa
             ]);
-            $stmt = $pdo->query('SELECT id, npm, nama, program_studi, angkatan, email, created_at FROM mahasiswa ORDER BY id DESC');
+        } else {
+            http_response_code(404);
+            echo json_encode([
+                'status' => 'error',
+                'message' => "Mahasiswa dengan ID {$id} tidak ditemukan."
+            ]);
         }
 
-        $result = $stmt->fetchAll();
-        http_response_code(200);
-        echo json_encode([
-            'status' => 'success',
-            'total' => count($result),
-            'data' => $result
-        ]);
+        return;
     }
+
+    $search = isset($_GET['search'])
+        ? trim($_GET['search'])
+        : '';
+
+    if ($search !== '') {
+        // Mencari berdasarkan NPM, nama, atau program studi
+        $stmt = $pdo->prepare(
+            'SELECT id, npm, nama, program_studi, angkatan, email, created_at
+             FROM mahasiswa
+             WHERE npm LIKE :kw1
+                OR nama LIKE :kw2
+                OR program_studi LIKE :kw3
+             ORDER BY id DESC'
+        );
+
+        $kw = "%{$search}%";
+
+        $stmt->execute([
+            ':kw1' => $kw,
+            ':kw2' => $kw,
+            ':kw3' => $kw
+        ]);
+    } else {
+        // Mengambil seluruh data mahasiswa
+        $stmt = $pdo->query(
+            'SELECT id, npm, nama, program_studi, angkatan, email, created_at
+             FROM mahasiswa
+             ORDER BY id DESC'
+        );
+    }
+
+    $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    http_response_code(200);
+    echo json_encode([
+        'status' => 'success',
+        'total' => count($result),
+        'data' => $result
+    ]);
 }
 
 /**
@@ -167,7 +201,8 @@ function handlePut(PDO $pdo, ?int $id): void {
    }
 
    $input = json_decode(file_get_contents('php://input'), true) ?? [];
-   $stmt = $pdo->prepare('UPDATE mahasiswa SET nama = :nama, program_studi = :prodi, angkatan, email = :email WHERE id = :id');
+   
+   $stmt = $pdo->prepare('UPDATE mahasiswa SET nama = :nama, program_studi = :prodi, angkatan = :angkatan, email = :email WHERE id = :id');
    $stmt->execute([
     ':id' => $id,
     ':nama' => trim($input['nama'] ?? ''),
